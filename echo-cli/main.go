@@ -41,6 +41,7 @@ type result struct {
 }
 
 func Client(addr string, buf []byte, n int, start <-chan bool, stop <-chan bool, resChan chan<- *result, wg *sync.WaitGroup) {
+	defer wg.Done()
 	<-start
 	res := new(result)
 	var conn net.Conn
@@ -52,7 +53,6 @@ func Client(addr string, buf []byte, n int, start <-chan bool, stop <-chan bool,
 	defer conn.Close()
 	res.d, res.err = pingPong(conn, n, buf)
 	resChan <- res
-	wg.Done()
 }
 
 type BenchClient struct {
