@@ -9,6 +9,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"sync"
 	"time"
 )
 
@@ -39,7 +40,7 @@ type result struct {
 	err error
 }
 
-func Client(addr string, buf []byte, n int, start <-chan bool, stop <-chan bool, resChan chan<- *result) {
+func Client(addr string, buf []byte, n int, start <-chan bool, stop <-chan bool, resChan chan<- *result, wg *sync.WaitGroup) {
 	<-start
 	res := new(result)
 	var conn net.Conn
@@ -51,6 +52,7 @@ func Client(addr string, buf []byte, n int, start <-chan bool, stop <-chan bool,
 	defer conn.Close()
 	res.d, res.err = pingPong(conn, n, buf)
 	resChan <- res
+	wg.Done()
 }
 
 type BenchClient struct {
@@ -61,6 +63,7 @@ type BenchClient struct {
 	stop    chan bool
 	resChan chan *result
 	out     io.Writer
+	wg      *sync.WaitGroup
 }
 
 func (self *BenchClient) Connect() error {
@@ -81,8 +84,10 @@ func (self *BenchClient) Connect() error {
 	if err != nil {
 		return err
 	}
+	self.wg = new(sync.WaitGroup)
+	self.wg.Add(self.N)
 	for i := 0; i < self.N; i++ {
-		go Client(self.Addr, buf[:], self.M, self.start, self.stop, self.resChan)
+		go Client(self.Addr, buf[:], self.M, self.start, self.stop, self.resChan, self.wg)
 	}
 	return nil
 }
@@ -103,6 +108,10 @@ func (self *BenchClient) collectResults() {
 func (self *BenchClient) Start() {
 	go self.collectResults()
 	close(self.start)
+}
+
+func (self *BenchClient) Wait() {
+	self.wg.Wait()
 }
 
 var argvNrConn = flag.Int("n", 10, "number of concurrent connections")
@@ -134,6 +143,7 @@ func main() {
 	r.ReadLine()
 	b.Start()
 
+	b.Wait()
 	fmt.Printf("Hit Enter to stop")
 	r.ReadLine()
 }
