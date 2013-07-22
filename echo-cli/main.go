@@ -15,13 +15,9 @@ import (
 func pingPong(conn net.Conn, m int, buf []byte) (d time.Duration, err error) {
 	var n int
 	var b [16]byte
-	if len(buf) != 16 {
-		err = fmt.Errorf("invalid buffer size")
-		return
-	}
 	start := time.Now()
 	for i := 0; i < m; i++ {
-		n, err = conn.Write(buf)
+		n, err = conn.Write(buf[:])
 		if err != nil {
 			return
 		}
@@ -50,6 +46,7 @@ func Client(addr string, buf []byte, n int, start <-chan bool, stop <-chan bool,
 	conn, res.err = net.Dial("tcp", addr)
 	if res.err != nil {
 		resChan <- res
+		return
 	}
 	defer conn.Close()
 	res.d, res.err = pingPong(conn, n, buf)
@@ -96,7 +93,7 @@ func (self *BenchClient) collectResults() {
 	}
 	for r := range self.resChan {
 		if r.err != nil {
-			fmt.Fprintf(self.out, "Failed\n")
+			fmt.Fprintf(self.out, "Failed: %v\n", r.err)
 		} else {
 			fmt.Fprintf(self.out, "%v\n", r.d.Seconds())
 		}
